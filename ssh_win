@@ -1,0 +1,41 @@
+#!/bin/bash
+
+# ssh_win - SSH command for WSL behind Windows host
+# This command uses the same SSH approach as the deploy.sh script
+# for connecting to Windows servers with WSL
+
+# Usage: ssh_win [user@]host [command]
+# Example: ssh_win user@windows-server
+# Example: ssh_win user@windows-server "ls -la"
+
+# Check if at least 1 argument is provided (host)
+if [ $# -lt 1 ]; then
+    echo "Usage: ssh_win [user@]host [command]"
+    echo ""
+    echo "This command uses SSH with WSL support for Windows hosts."
+    echo "It automatically executes 'bash' command to get Ubuntu console in WSL."
+    echo ""
+    echo "Examples:"
+    echo "  ssh_win user@windows-server"
+    echo "  ssh_win user@windows-server 'ls -la'"
+    echo "  ssh_win user@windows-server 'cd /opt/app && docker ps'"
+    echo ""
+    echo "The command is equivalent to:"
+    echo "  ssh [user@]host 'wsl -u root bash -s' < temp_script"
+    exit 1
+fi
+
+HOST="$1"
+shift  # Remove the first argument (host) from $@
+
+# If no command is provided, just connect to WSL bash
+if [ $# -eq 0 ]; then
+    ssh "$HOST" "wsl -u root bash"
+else
+    # If command is provided, create a temporary script to avoid quote escaping issues
+    # This is the same approach used in deploy.sh
+    temp_script=$(mktemp)
+    printf '%s\n' "$@" > "$temp_script"
+    ssh "$HOST" "wsl -u root bash -s" < "$temp_script"
+    rm -f "$temp_script"
+fi
