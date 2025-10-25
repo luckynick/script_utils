@@ -1,0 +1,50 @@
+#!/bin/bash
+
+# rsync_win - rsync command for WSL behind Windows host
+# This command uses the same rsync approach as the deploy.sh script
+# for syncing files to Windows servers with WSL
+
+# Usage: rsync_win [rsync-options] source destination
+# Example: rsync_win -avz --progress ./ user@windows-server:/path/to/destination/
+
+# Check if at least 2 arguments are provided (source and destination)
+if [ $# -lt 2 ]; then
+    echo "Usage: rsync_win [rsync-options] source destination"
+    echo ""
+    echo "This command uses rsync with WSL support for Windows hosts."
+    echo "It automatically uses the --rsync-path option to execute rsync in WSL."
+    echo ""
+    echo "Examples:"
+    echo "  rsync_win -avz --progress ./ user@windows-server:/path/to/destination/"
+    echo "  rsync_win -avz --delete --exclude 'node_modules' ./ user@windows-server:/opt/app/"
+    echo ""
+    echo "The command is equivalent to:"
+    echo "  rsync -e 'ssh' --rsync-path='wsl -u root -e rsync' [your-options]"
+    exit 1
+fi
+
+# Execute rsync with WSL support
+# The --rsync-path option tells the remote side where to find rsync in WSL
+rsync -e "ssh" --rsync-path="wsl -u root bash -c 'HOME=/root; exec rsync'" "$@"
+
+# Check if the transfer was successful
+if [ $? -eq 0 ]; then
+    # Extract the remote path from the last argument
+    last_arg="${@: -1}"
+    if [[ "$last_arg" =~ ^[^:]+: ]]; then
+        # Split on the first colon to get host and path
+        host_part="${last_arg%%:*}"
+        path_part="${last_arg#*:}"
+        
+        # If the path starts with ~, expand it to /root/
+        if [[ "$path_part" =~ ^~ ]]; then
+            expanded_path="${path_part/#\~//root}"
+        else
+            expanded_path="$path_part"
+        fi
+        
+        # Fix permissions and ownership on the remote side
+        echo "Fixing permissions and ownership on remote server..."
+        ssh "$host_part" "wsl -u root bash -c \"chown -R root:root $expanded_path && chmod -R 644 $expanded_path 2>/dev/null || true\""
+    fi
+fi
